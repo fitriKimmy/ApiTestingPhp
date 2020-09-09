@@ -102,6 +102,110 @@ class FeatureContext implements Context
         throw new Exception("Expected repository not found");
     }
 
+
+     /**
+     * @When I create :arg1 repository
+     */
+    public function iCreateRepository($arg1)
+    {
+        $parameters = json_encode(['name'=> $arg1]);
+        $this->client-> post('/user/repos',['body' => $parameters]);
+        $this->iExpectResponseCode(200);
+    }
+
+      /**
+     * @Given I have a repository called :arg1
+     */
+    public function iHaveARepositoryCalled($arg1)
+    {
+        $this->iRequestAListOfMyRepositories();
+        $this->theResultShouldIncludeARepositoryCalled($arg1);
+    }
+
+    /**
+     * @When I watch the :arg1 repository
+     */
+    public function iWatchTheRepository($arg1)
+    {
+        $url = '/repos/' . $this->username . '/' .$arg1. '/subscription';
+        $body = json_encode(['subscribed'=> 'true']);
+        $this->client->put($url,['body' => $body]);
+    }
+
+    /**
+     * @Then The :arg1 repository will  list me as a watcher
+     */
+    public function theRepositoryWillListMeAsAWatcher($arg1)
+    {
+        $url = '/repos/' . $this->username . '/' . $arg1 . '/subscribers';
+        $this->response = $this->client->get($url);
+        
+        $subscribers = $this->getBodyAsJson();
+        foreach($subscribers as $subscriber) {
+            if($subscriber['login'] == $this->username){
+                return true;
+            }else{
+                throw new Exception("You are not listed as a subsciber");
+            }
+        }
+    }
+
+    /**
+     * @Then I delete the repository called :arg1
+     */
+    public function iDeleteTheRepositoryCalled($arg1)
+    {
+        $url = '/repos/' . $this->username . '/' .$arg1;
+        $this->response = $this->client->delete($url);
+        $this->iExpectResponseCode(204);
+    }
+
+    /**
+     * @Given I have the following repositories:
+     */
+    public function iHaveTheFollowingRepositories(TableNode $table)
+    {
+        $this->table = $table->getRows();
+        array_shift($this->table);
+
+        foreach($this->table as $id => $row){
+            $this->response = $this->client->get('/repos/' .$row[0]. '/' . $row[1]);
+            $this->iExpectResponseCode(200);
+        }
+    }
+
+    /**
+     * @When I watch each repository
+     */
+    public function iWatchEachRepository()
+    {
+        $parameters = json_encode(['subscribed' => 'true']);
+        foreach($this->table as $row){
+            $url = '/repos/' . $row[0]. '/' .$row[1] .'/subscription';
+            $this->client ->put($url, ['body' => $parameters]);
+        }
+    }
+
+    /**
+     * @Then My watch list will include those repositories
+     */
+    public function myWatchListWillIncludeThoseRepositories()
+    {
+        $watch_url = '/users/' . $this->username . '/subscriptions';
+        $this->response = $this->client->get($watch_url);
+        $watches = $this->getBodyAsJson();
+
+        foreach($this->table as $row){
+            $full_name = $row['name'];
+            foreach($watches as $watch) {
+               if($full_name != $watch['full_name']){
+                   break 2;
+               } 
+            }
+            throw new Exception("Error " .$this->username. "is not watching " .$full_name);
+        }
+    }
+
     protected function getBodyAsJson(){
         return json_decode($this->response->getBody(), true);
     }
